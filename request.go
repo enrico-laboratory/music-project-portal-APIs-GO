@@ -1,18 +1,23 @@
 package main
 
 import (
+	"context"
 	"example.com/music-project-portal-APIs-GO/notionApi"
 	"example.com/music-project-portal-APIs-GO/parser"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
 )
 
 func main() {
 
+	// NOTION CLIENT
 	c, err := notionApi.NewClient(os.Getenv("NOTION_TOKEN"))
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
+
+	// MUSIC PROJECT FILTERS
 	var musicProjectsQueryFilter notionApi.MusicProjectsQueryFilter
 	musicProjectsQueryFilter.Filter.Property = "Status"
 	musicProjectsQueryFilter.Filter.Select.Equals = "On Going"
@@ -21,11 +26,11 @@ func main() {
 	response := c.Database.Query(MusicProjectDatabaseId, musicProjectsQueryFilter)
 	var musicProjectModel parser.MusicProjectModel
 	musicProjectParsed := musicProjectModel.GetMusicProjectParsed(response)
-	for _, record := range musicProjectParsed {
-		log.Print(record.Id, record.Title, record.Description)
-	}
+	//for _, record := range musicProjectParsed {
+	//	log.Print(record.Id, record.Title, record.Description)
+	//}
 
-	// LOCATIONS DATABASE
+	//// LOCATIONS DATABASE
 	//response := c.Database.Query(LocationDatabaseId, nil)
 	//var locationModel parser.LocationModels
 	//mappedLocation := parser.Parser(locationModel, response)
@@ -39,15 +44,23 @@ func main() {
 	//sb := string(bodyString)
 	//log.Println(sb)
 
-	//
-	//var database Database
-	//
-	//err := json.Unmarshal(body, &database)
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
-	//
-	////fmt.Println(string(body))
-	//fmt.Println(json)
+	// MONGODB CLIENT
+	client, err := parser.NewClient()
+	if err != nil {
+		log.Fatal("Damn!!")
+	}
+
+	// MONGODB UPDATE
+	musicProjectCollection := client.Database("music_projects_portal").Collection("music_project")
+	opts := options.Update().SetUpsert(true)
+
+	// TODO fix error: cannot transform type []parser.MusicProjectModelParsed to a BSON Document:
+	// TODO WriteArray can only write a Array while positioned on a Element or Value but is positioned on a TopLevel
+	many, err := musicProjectCollection.UpdateMany(context.TODO(), musicProjectParsed, opts)
+	if err != nil {
+		log.Print(err)
+	}
+
+	log.Print(many.UpsertedCount)
 
 }
